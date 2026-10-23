@@ -10,7 +10,7 @@ import {
   Title, Tooltip, Legend, Filler,
 } from 'chart.js';
 import { thrashingCurve, safeProcessCount } from '../engine/thrashing.js';
-import { Activity, ShieldCheck, AlertOctagon, Info } from 'lucide-react';
+import { Activity, ShieldCheck, AlertOctagon } from 'lucide-react';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
@@ -28,22 +28,22 @@ export default function ThrashingChart() {
       {
         label: 'CPU Utilization (%)',
         data: pts.map((p) => +(p.cpuUtil * 100).toFixed(1)),
-        borderColor: '#3b82f6',
+        borderColor: '#863bff',
         backgroundColor: (ctx) => {
           const chart = ctx.chart;
           const { ctx: c, chartArea } = chart;
-          if (!chartArea) return 'rgba(59,130,246,0.08)';
+          if (!chartArea) return 'rgba(134,59,255,0.08)';
           const gradient = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-          gradient.addColorStop(0, 'rgba(59,130,246,0.18)');
-          gradient.addColorStop(1, 'rgba(59,130,246,0.01)');
+          gradient.addColorStop(0, 'rgba(134,59,255,0.28)');
+          gradient.addColorStop(1, 'rgba(134,59,255,0.01)');
           return gradient;
         },
         fill: true,
         tension: 0.4,
         borderWidth: 2,
         pointRadius: pts.map((p) => (p.thrashing ? 6 : 4)),
-        pointBackgroundColor: pts.map((p) => (p.thrashing ? '#f43f5e' : '#3b82f6')),
-        pointBorderColor:     pts.map((p) => (p.thrashing ? 'rgba(244,63,94,0.4)' : 'rgba(59,130,246,0.4)')),
+        pointBackgroundColor: pts.map((p) => (p.thrashing ? '#f43f5e' : '#863bff')),
+        pointBorderColor:     pts.map((p) => (p.thrashing ? 'rgba(244,63,94,0.4)' : 'rgba(134,59,255,0.4)')),
         pointBorderWidth: 2,
       },
       {

@@ -1,133 +1,102 @@
 /**
- * About page — OS theory: demand paging, page faults, thrashing, working set.
+ * About — Operating Systems Architecture & Virtual Memory Foundations.
+ * Covers demand paging traps, the working-set model, thrashing dynamics,
+ * stack algorithms, and production kernel implementations.
  */
-import { BookOpen, Cpu, AlertTriangle, Layers, GitBranch } from 'lucide-react';
+import { BookOpen, Cpu, AlertTriangle, Layers, GitBranch, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const SECTIONS = [
   {
     icon: <Cpu size={20} />,
-    color: '#3b82f6',
+    color: '#863bff',
     title: 'Virtual Memory & Demand Paging',
     content: [
       {
         subtitle: 'What is Virtual Memory?',
-        text: `Virtual memory is an abstraction that gives each process the illusion of having a large, 
-        contiguous address space, even if physical RAM is limited. The OS maps virtual page numbers to 
-        physical frame numbers using a page table stored in memory (and cached in the TLB — Translation 
-        Lookaside Buffer).`,
+        text: `Virtual memory is a foundational OS abstraction that provides each process with the illusion of a vast, contiguous address space, regardless of physical RAM fragmentation or size limits. The hardware Memory Management Unit (MMU) translates virtual page numbers to physical frame numbers using page tables stored in RAM and cached within the Translation Lookaside Buffer (TLB).`,
       },
       {
-        subtitle: 'Demand Paging',
-        text: `With demand paging, pages are only loaded into physical memory when they are actually 
-        referenced ("on demand"). When a process starts, its page table entries are marked invalid. 
-        The first access to any page triggers a page fault, causing the OS to:
+        subtitle: 'The Demand Paging Mechanism',
+        text: `Under pure demand paging, pages are loaded into physical RAM only when referenced by an instruction. Initial page table entries are marked invalid with a Valid-Bit of 0. When an instruction references an unmapped virtual address:
         
-        1. Trap into kernel mode
-        2. Find a free frame (or evict an existing page)
-        3. Read the page from disk into the frame
-        4. Update the page table and resume the faulting instruction
-        
-        This allows programs much larger than physical memory to run, and avoids loading 
-        code/data that is never actually used.`,
+1. The MMU raises a hardware page-fault interrupt trap to the kernel.
+2. The OS preserves process register state and consults internal memory descriptors.
+3. The kernel finds an unoccupied frame or executes a replacement policy to evict a resident victim page.
+4. The requested page is read from secondary storage (disk or SSD swap partition).
+5. The page table entry is updated to point to the frame, the valid bit is set to 1, and the faulting instruction is restarted.`,
       },
       {
-        subtitle: 'The Page Fault Lifecycle',
-        text: `A page fault is expensive — disk access takes ~10ms vs ~100ns for RAM (100,000× slower). 
-        Minimizing page faults is therefore critical to performance. The choice of page replacement 
-        algorithm directly controls how many faults occur.`,
+        subtitle: 'The Page Fault Penalty',
+        text: `Serving a page fault requires disk I/O, which operates on the order of 100,000× to 1,000,000× slower than direct semiconductor RAM access. Minimizing page faults through intelligent replacement algorithms is therefore paramount to computer system performance.`,
       },
     ],
   },
   {
     icon: <AlertTriangle size={20} />,
     color: '#f43f5e',
-    title: 'Thrashing',
+    title: 'Thrashing & Multiprogramming Dynamics',
     content: [
       {
-        subtitle: 'What is Thrashing?',
-        text: `Thrashing occurs when a process (or the system) spends more time servicing page faults 
-        than executing useful instructions. This happens when a process has fewer physical frames 
-        than its active working set requires — it faults on nearly every memory reference.`,
+        subtitle: 'What Causes Thrashing?',
+        text: `Thrashing occurs when an operating system spends more execution cycles servicing page faults than executing user instructions. This catastrophe transpires when total active memory demand across all concurrent processes exceeds physical RAM capacity.`,
       },
       {
-        subtitle: 'The Thrashing Cycle',
-        text: `As the OS admits more processes to improve CPU utilization:
+        subtitle: 'The Downward Thrashing Spiral',
+        text: `In naive operating systems:
         
-        1. Each process gets fewer frames
-        2. Fault rates rise for all processes
-        3. Processes spend most time waiting for disk I/O
-        4. CPU utilization collapses — the OS queues up even more processes
-        5. Downward spiral: the system appears "hung"
-        
-        The CPU utilization curve rises, peaks, then sharply drops — this cliff is the thrashing threshold.`,
-      },
-      {
-        subtitle: 'Prevention: The Working-Set Model',
-        text: `The working-set model (Peter Denning, 1968) defines the working set WS(t,Δ) as the 
-        set of pages referenced in the last Δ references at time t. The OS should admit a new 
-        process only if: sum of all working set sizes ≤ total physical frames. 
-        If not, suspend a process until enough memory is free.`,
+1. Processes fault frequently because they have fewer frames than their working set.
+2. Processes enter the disk I/O wait queue, causing CPU utilization to decline.
+3. The OS CPU scheduler detects low processor load and erroneously admits additional processes to increase concurrency.
+4. The newly admitted processes demand even more frames, starving existing processes further.
+5. CPU utilization plummets near zero, and the system appears completely frozen.`,
       },
       {
         subtitle: "Belady's Anomaly",
-        text: `Counterintuitively, the FIFO algorithm can suffer MORE page faults with MORE frames. 
-        This is Belady's Anomaly (1969). Classic example: reference string [1,2,3,4,1,2,5,1,2,3,4,5]
-        gives 9 faults with 3 frames but 10 faults with 4 frames under FIFO. 
-        LRU, OPT, and Clock do NOT exhibit Belady's Anomaly — they belong to the "stack algorithms" family.`,
+        text: `Discovered by Laszlo Belady in 1969, this counterintuitive anomaly demonstrates that under FIFO replacement, allocating MORE physical frames can result in MORE page faults on certain reference strings. Stack algorithms like LRU and OPT are mathematically proven to be immune to Belady's Anomaly.`,
       },
     ],
   },
   {
     icon: <Layers size={20} />,
-    color: '#a78bfa',
-    title: 'Working Set Model',
+    color: '#c084fc',
+    title: 'The Working-Set Model (Peter Denning)',
     content: [
       {
-        subtitle: 'Formal Definition',
-        text: `WS(t, Δ) = { p : p was referenced at least once in the interval (t−Δ, t] }
+        subtitle: 'Mathematical Definition',
+        text: `The working set W(t, Δ) represents the set of distinct pages referenced by a process within the past Δ virtual time units:
         
-        Where:
-        • t = current virtual time (reference count)
-        • Δ = window size (the "locality window")
-        • p = page number
-        
-        A smaller Δ captures short-term locality; a larger Δ approximates the full program's needs.`,
+W(t, Δ) = { p ∈ Pages : p was referenced during [t − Δ, t] }
+
+Where:
+• t = current virtual memory clock cycle
+• Δ = working-set window parameter
+
+If Δ is chosen too small, it fails to encompass the active locality; if Δ is chosen too large, it overlaps multiple distinct phases of program execution.`,
       },
       {
         subtitle: 'Locality of Reference',
-        text: `Programs do not access memory uniformly. They exhibit:
+        text: `Programs exhibit two primary dimensions of memory locality:
         
-        • Temporal locality: recently accessed locations are likely to be accessed again soon.
-        • Spatial locality: locations near recently accessed ones are likely to be accessed soon.
-        
-        These properties make LRU and Clock effective in practice — they keep the "hot" pages in memory.`,
+• Temporal Locality: If a page is accessed, it is likely to be accessed again in the near future (e.g., loops, stack variables).
+• Spatial Locality: If a page is accessed, nearby memory locations are likely to be accessed soon (e.g., sequential array iterations, sequential code execution).`,
       },
     ],
   },
   {
     icon: <GitBranch size={20} />,
-    color: '#f59e0b',
-    title: 'Algorithm Comparison',
+    color: '#47bfff',
+    title: 'Stack Algorithms & Real-World Implementations',
     content: [
       {
-        subtitle: 'Stack Property',
-        text: `An algorithm has the stack property if the set of pages in memory with n frames is 
-        always a subset of the pages in memory with n+1 frames. LRU, OPT, and Clock have this property — 
-        they cannot exhibit Belady's Anomaly. FIFO does NOT.`,
+        subtitle: 'The Stack Inclusion Property',
+        text: `An algorithm satisfies the Stack Property if the set of pages resident in an n-frame allocation is always a strict subset of the pages resident in an (n + 1)-frame allocation for identical reference sequences. LRU, OPT, and Clock adhere to this property; FIFO does not.`,
       },
       {
-        subtitle: 'Real-World Usage',
-        text: `• Linux: uses an enhanced Clock algorithm called "Active/Inactive list LRU" with two lists 
-          (active pages and recently-evicted candidates).
-        • Windows: uses a working-set trimmer — the OS periodically reduces each process's resident 
-          pages when memory is under pressure.
-        • Database systems: often manage their own buffer pools with LRU-K or ARC policies.`,
-      },
-      {
-        subtitle: 'Fault Rate vs. Frames',
-        text: `For all stack algorithms, increasing frame count monotonically decreases fault rate. 
-        The relation is hyperbolic — diminishing returns. The "knee" of the curve (where adding 
-        frames stops helping significantly) corresponds roughly to the working set size.`,
+        subtitle: 'Production Operating System Kernels',
+        text: `• Linux Kernel: Uses an active and inactive dual-list Clock replacement heuristic (kswapd daemon), distinguishing inactive pages as eviction candidates before dirty writeback.
+• Windows NT / 11: Employs a working-set trimmer daemon that periodically trims resident frames from inactive processes to feed the standby page pool.
+• Database Engines: Engines like PostgreSQL and SQLite maintain custom buffer pool algorithms (such as 2Q or Adaptive Replacement Cache - ARC) to optimize for query plan locality.`,
       },
     ],
   },
@@ -135,50 +104,110 @@ const SECTIONS = [
 
 export default function About() {
   return (
-    <div className="page-content">
-      <div className="page-hero-small">
-        <h1>OS Theory & Concepts</h1>
-        <p>The computer science behind demand paging, page replacement, and thrashing.</p>
+    <div className="page-wrapper">
+      {/* ── Page Header ── */}
+      <div className="section-header" style={{ paddingTop: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem' }}>
+              <BookOpen size={22} style={{ color: 'var(--primary-light)' }} />
+              <h1 style={{ fontSize: '1.85rem', fontWeight: 800, letterSpacing: '-0.03em' }}>
+                Virtual Memory Theory & Architecture
+              </h1>
+            </div>
+            <p style={{ color: 'var(--text-2)', fontSize: '0.92rem' }}>
+              The computer science principles governing demand paging, page fault lifecycles, memory pressure, and kernel cache management.
+            </p>
+          </div>
+
+          <Link to="/simulator" className="link-btn link-btn-primary">
+            <span>Explore in Simulator</span>
+            <ArrowRight size={14} />
+          </Link>
+        </div>
       </div>
 
-      <div className="about-sections">
+      {/* ── Theory Cards ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginTop: '1.5rem' }}>
         {SECTIONS.map((sec) => (
-          <section key={sec.title} className="about-section">
-            <div className="about-section-header">
-              <span className="about-section-icon" style={{ color: sec.color, background: `${sec.color}18` }}>
+          <div key={sec.title} className="card" style={{ padding: '2rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+              <div
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 'var(--r-sm)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: `${sec.color}18`,
+                  color: sec.color,
+                  border: `1px solid ${sec.color}35`,
+                }}
+              >
                 {sec.icon}
-              </span>
-              <h2 className="about-section-title">{sec.title}</h2>
+              </div>
+              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>
+                {sec.title}
+              </h2>
             </div>
-            <div className="about-section-body">
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               {sec.content.map((block) => (
-                <div key={block.subtitle} className="about-block">
-                  <h3 className="about-block-title">{block.subtitle}</h3>
+                <div
+                  key={block.subtitle}
+                  style={{
+                    background: 'var(--surface-1)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--r-md)',
+                    padding: '1.25rem 1.5rem',
+                  }}
+                >
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#fff', marginBottom: '0.6rem' }}>
+                    {block.subtitle}
+                  </h3>
                   {block.text.split('\n\n').map((para, i) => (
-                    <p key={i} className="about-block-text">{para.trim()}</p>
+                    <p
+                      key={i}
+                      style={{
+                        fontSize: '0.9rem',
+                        color: 'var(--text-2)',
+                        lineHeight: 1.7,
+                        marginBottom: i < block.text.split('\n\n').length - 1 ? '0.75rem' : 0,
+                        whiteSpace: 'pre-line',
+                      }}
+                    >
+                      {para.trim()}
+                    </p>
                   ))}
                 </div>
               ))}
             </div>
-          </section>
+          </div>
         ))}
-      </div>
 
-      {/* References */}
-      <section className="about-section">
-        <div className="about-section-header">
-          <span className="about-section-icon" style={{ color: '#71717a', background: 'var(--surface-3)' }}>
-            <BookOpen size={20} />
-          </span>
-          <h2 className="about-section-title">Further Reading</h2>
+        {/* Academic References */}
+        <div className="card" style={{ padding: '1.75rem 2rem' }}>
+          <div className="card-title">
+            <BookOpen size={16} />
+            <span>Foundational Academic Citations & Literature</span>
+          </div>
+          <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.65rem', fontSize: '0.86rem', color: 'var(--text-2)' }}>
+            <li>
+              • Silberschatz, Galvin & Gagne — <em style={{ color: '#fff' }}>Operating System Concepts</em> (10th ed.), Chapter 10: Virtual Memory.
+            </li>
+            <li>
+              • Tanenbaum & Bos — <em style={{ color: '#fff' }}>Modern Operating Systems</em> (4th ed.), Chapter 3: Memory Management.
+            </li>
+            <li>
+              • Denning, Peter J. (1968) — <em style={{ color: '#fff' }}>"The Working Set Model for Program Behavior"</em>, Communications of the ACM (CACM).
+            </li>
+            <li>
+              • Belady, Laszlo A. (1969) — <em style={{ color: '#fff' }}>"An Anomaly in Space-Time Characteristics of Certain Programs Running in a Paging Machine"</em>, CACM.
+            </li>
+          </ul>
         </div>
-        <ul className="about-refs">
-          <li>Silberschatz, Galvin & Gagne — <em>Operating System Concepts</em> (10th ed.), Ch. 10</li>
-          <li>Tanenbaum — <em>Modern Operating Systems</em> (4th ed.), Ch. 3</li>
-          <li>Denning, P.J. (1968) — "The working set model for program behavior" — <em>CACM</em></li>
-          <li>Belady, L.A. (1969) — "A study of replacement algorithms for virtual storage computers" — <em>IBM Systems Journal</em></li>
-        </ul>
-      </section>
+      </div>
     </div>
   );
 }

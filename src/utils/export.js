@@ -142,7 +142,7 @@ export function exportPDF(run, refs) {
  * @param {number[]} refs
  * @returns {string}
  */
-export function exportCSV(run, refs) {
+export function exportCSV(run, _refs) {
   const header = 'Step,Page,Hit,Evicted,Frames,Cumulative Faults';
   const rows = run.steps.map((s, i) =>
     [
